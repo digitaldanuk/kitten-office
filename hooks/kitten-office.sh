@@ -16,7 +16,13 @@ task=""
 
 case "$event" in
   SessionStart)     state=done;    task="New session. Waiting for your first message." ;;
-  UserPromptSubmit) state=working; task=$(field .prompt | tr '\n' ' ' | cut -c1-160) ;;
+  UserPromptSubmit)
+    state=working
+    # Keep only what a person typed: drop automatic notes such as <system-reminder>...</system-reminder>
+    # or <task-notification>...</task-notification>, then any stray tags, then tidy the spaces.
+    task=$(jq -r '(.prompt // "")
+      | gsub("<(?<t>[A-Za-z][A-Za-z0-9_]*-[A-Za-z0-9_-]+)[^>]*>[\\s\\S]*?</\\k<t>>"; "")
+      | gsub("<[^>]*>"; "") | gsub("\\s+"; " ") | ltrimstr(" ") | rtrimstr(" ")' <<<"$input" | cut -c1-160) ;;
   PreToolUse)       state=working ;;
   Notification)
     msg=$(field .message)

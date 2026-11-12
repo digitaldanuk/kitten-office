@@ -276,6 +276,7 @@ function pose(k) {
 }
 function coatFor(id) { let h = 0; for (const c of String(id)) h = (h * 31 + c.charCodeAt(0)) >>> 0; return h % COATS.length; }
 
+const short = (t, n) => { t = String(t || '').replace(/\s+/g, ' ').trim(); return t.length > n ? t.slice(0, n - 1).trimEnd() + '…' : t; };
 function log(text) {
   const d = new Date();
   feed.unshift({ t: d.toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' }), text });
@@ -288,9 +289,9 @@ function setState(k, state, task) {
   k.state = state; if (task) k.task = task; k.since = Date.now();
   if (state === 'done' && prev !== 'done' && !reduce) { k.cheer = 1.6; k.path = []; }
   else route(k, target(k));
-  if (state === 'working') log(`${k.name} is working on ${k.task}`);
-  if (state === 'waiting') log(`${k.name} needs you: ${k.task}`);
-  if (state === 'done') log(`${k.name} finished: ${k.task}`);
+  if (state === 'working') log(`${k.name} is working on: ${short(k.task, 70)}`);
+  if (state === 'waiting') log(`${k.name} needs you: ${short(k.task, 70)}`);
+  if (state === 'done') log(`${k.name} finished: ${short(k.task, 70)}`);
 }
 function leave(k) {
   if (k.leaving) return;
@@ -497,7 +498,7 @@ function renderRoster() {
       <div>
         <div class="row1"><span class="name">${esc(k.name)}</span><span class="pill ${k.state}">${LABEL[k.state]}</span></div>
         <div class="meta">${esc(k.project)} · ${k.where === 'mac' ? 'Mac' : 'Cloud'} · ${ago(k.since)}</div>
-        <div class="task">${esc(k.task)}</div>
+        <div class="task">${esc(short(k.task, 120))}</div>
       </div>
     </button>`).join('') || '<p class="note">No agents running. Kittens walk in through the door when a session starts.</p>';
   const n = st => list.filter(k => k.state === st).length;
