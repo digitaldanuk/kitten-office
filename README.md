@@ -17,7 +17,7 @@ On iPad: open the page in Safari, then Share → Add to Home Screen.
    - [x] Code written: `supabase/schema.sql`, `hooks/kitten-office.sh`, `install.sh`, live mode in `index.html`.
    - [x] Database set up (inside the StoryOS test project, in its own `kitten_office` schema).
    - [x] Page connected (live when opened with `#<viewer key>` on the end of the link).
-   - [ ] Hook installed on the Mac and tested.
+   - [x] Hook installed on the Mac and tested.
 3. [ ] Real agents in the cloud: the same hook in cloud sessions.
 4. [x] Hosted on GitHub Pages: https://digitaldanuk.github.io/kitten-office/
 
