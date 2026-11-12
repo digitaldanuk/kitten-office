@@ -74,6 +74,15 @@ button{font:inherit;color:inherit}
   .roster,.feed{overflow:visible}
 }
 @media (prefers-reduced-motion:reduce){.chip.waiting.on{animation:none}}
+
+/* Full screen: only the office, as big as the screen allows */
+html.full,html.full body{height:100%;overflow:hidden;background:#1b1624}
+html.full .app{height:100%;min-height:0;grid-template-rows:minmax(0,1fr);padding:0}
+html.full header,html.full .feed,html.full .roster{display:none}
+html.full .main{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr);grid-template-areas:"stage";place-items:center}
+html.full .stage{width:min(100vw,calc(100vh*1.6));width:min(100vw,calc(100dvh*1.6));border-radius:0}
+.exit-full{position:fixed;z-index:5;top:calc(env(safe-area-inset-top,0px) + 10px);right:calc(env(safe-area-inset-right,0px) + 10px);opacity:.75}
+.exit-full:hover,.exit-full:focus-visible{opacity:1}
 </style>
 
 <div class="app">
@@ -84,7 +93,9 @@ button{font:inherit;color:inherit}
     <span class="demo" id="demoBadge">Demo: pretend agents</span>
     <button class="btn" id="pauseBtn" type="button" aria-pressed="false">Pause demo</button>
     <button class="btn" id="wakeBtn" type="button" aria-pressed="false">Keep screen on</button>
+    <button class="btn" id="fullBtn" type="button">Full screen</button>
   </header>
+  <button class="btn exit-full" id="exitFullBtn" type="button" hidden>Exit full screen</button>
   <div class="main">
     <div class="stage" id="stage"><canvas id="cv" aria-label="Pixel art office where each kitten is one of your agents"></canvas></div>
     <section class="feed" aria-label="Recent activity"><h2>Latest</h2><ol id="feed"></ol></section>
@@ -525,6 +536,24 @@ wakeBtn.addEventListener('click', () => {
   else { wantLock = true; getLock(); }
 });
 document.addEventListener('visibilitychange', () => { if (wantLock && document.visibilityState === 'visible') getLock(); });
+
+// ---------- full screen ----------
+const root = document.documentElement, exitFullBtn = document.getElementById('exitFullBtn');
+function setFull(on, fromClick) {
+  root.classList.toggle('full', on);
+  exitFullBtn.hidden = !on;
+  try { localStorage.setItem('kitten-full', on ? '1' : '0'); } catch {}
+  if (!fromClick) return;
+  // Ask the browser to hide its own bars too. Some iPads/browsers say no; the page layout still works.
+  try {
+    if (on && !document.fullscreenElement) (root.requestFullscreen || root.webkitRequestFullscreen)?.call(root)?.catch?.(() => {});
+    if (!on && (document.fullscreenElement || document.webkitFullscreenElement)) (document.exitFullscreen || document.webkitExitFullscreen)?.call(document)?.catch?.(() => {});
+  } catch {}
+}
+document.getElementById('fullBtn').addEventListener('click', () => setFull(true, true));
+exitFullBtn.addEventListener('click', () => setFull(false, true));
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && root.classList.contains('full')) setFull(false, true); });
+try { if (localStorage.getItem('kitten-full') === '1') setFull(true, false); } catch {}
 
 // ---------- pretend agents ----------
 const NAMES = ['Mochi', 'Pickle', 'Nori', 'Waffles', 'Juniper', 'Bean', 'Sprout', 'Pudding'];
