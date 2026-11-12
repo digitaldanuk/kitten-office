@@ -1,0 +1,574 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}[hidden]{display:none!important}</style>
+</head>
+<body>
+<title>Kitten Office</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400;600&family=Atkinson+Hyperlegible:wght@400;700&display=swap">
+<style>
+/* Layout: one-screen dashboard. Pixel office (16:10) top-left, activity feed under it, roster of kittens on the right. Stacks to one column on narrow screens. Single cosy evening look. */
+:root{
+  --chrome:#211b2c; --panel:#2d2540; --panel-2:#3a3052; --line:#4a3f63;
+  --ink:#f4eadc; --ink-dim:#b9abc7; --accent:#ffb27a;
+  --working:#7cc4ff; --waiting:#ffcf4a; --done:#8fd694;
+  --font-display:"Pixelify Sans", ui-monospace, Menlo, monospace;
+  --font-body:"Atkinson Hyperlegible", system-ui, -apple-system, sans-serif;
+  color-scheme:dark;
+}
+html{height:100%;box-sizing:border-box}
+*,*::before,*::after{box-sizing:border-box}
+body{height:100%;background:var(--chrome);color:var(--ink);font-family:var(--font-body);font-size:15px;line-height:1.4}
+.app{height:100%;display:grid;grid-template-rows:auto minmax(0,1fr);gap:12px;padding-block:12px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+header{display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px}
+h1{font-family:var(--font-display);font-weight:600;font-size:26px;margin:0;letter-spacing:.02em;line-height:1}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{font-family:var(--font-display);font-size:14px;padding:4px 10px;border-radius:999px;background:var(--panel);color:var(--ink-dim);display:inline-flex;align-items:center;gap:6px;font-variant-numeric:tabular-nums}
+.chip i{width:8px;height:8px;border-radius:2px;display:inline-block}
+.chip.waiting i{background:var(--waiting)} .chip.working i{background:var(--working)} .chip.done i{background:var(--done)}
+.chip.waiting.on{background:var(--waiting);color:#2a1d05;animation:pulse 1.6s ease-in-out infinite}
+.chip.waiting.on i{background:#2a1d05}
+@keyframes pulse{50%{box-shadow:0 0 0 5px rgba(255,207,74,.25)}}
+.spacer{flex:1}
+.demo{font-size:12px;color:var(--ink-dim);border:1px dashed var(--line);padding:3px 8px;border-radius:6px}
+button{font:inherit;color:inherit}
+.btn{font-family:var(--font-display);font-size:14px;background:var(--panel-2);border:1px solid var(--line);border-radius:8px;padding:6px 12px;cursor:pointer}
+.btn:hover{background:var(--line)}
+.btn[aria-pressed="true"]{background:var(--accent);color:#2a1a10;border-color:var(--accent)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+.main{display:grid;grid-template-columns:minmax(0,1fr) 300px;grid-template-rows:auto minmax(0,1fr);grid-template-areas:"stage roster" "feed roster";gap:12px;min-height:0}
+.stage{grid-area:stage;position:relative;aspect-ratio:16/10;width:min(100%,calc((100vh - 240px)*1.6));max-width:100%;justify-self:center;border-radius:10px;overflow:hidden;background:#1b1624;touch-action:manipulation}
+.stage canvas{position:absolute;inset:0;width:100%;height:100%;display:block;cursor:pointer}
+.feed{grid-area:feed;min-height:0;overflow-y:auto;background:var(--panel);border-radius:10px;padding:10px 14px}
+.feed h2,.roster h2{font-family:var(--font-display);font-weight:400;font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-dim);margin:0 0 6px}
+.feed ol{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:3px}
+.feed li{display:flex;gap:10px;font-size:14px;min-width:0}
+.feed time{font-family:var(--font-display);color:var(--ink-dim);font-variant-numeric:tabular-nums;flex:none}
+.feed li span{min-width:0;overflow-wrap:anywhere}
+.roster{grid-area:roster;min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:8px}
+.card{display:grid;grid-template-columns:44px minmax(0,1fr);gap:10px;align-items:start;text-align:left;width:100%;background:var(--panel);border:2px solid transparent;border-radius:10px;padding:10px;cursor:pointer}
+.card:hover{background:var(--panel-2)}
+.card.waiting{border-color:var(--waiting)}
+.card.sel{border-color:var(--accent);background:var(--panel-2)}
+.card img{width:44px;height:44px;image-rendering:pixelated;background:var(--panel-2);border-radius:8px}
+.row1{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.name{font-family:var(--font-display);font-weight:600;font-size:18px;line-height:1.1}
+.pill{font-family:var(--font-display);font-size:12px;padding:2px 8px;border-radius:999px;color:#1d1726;flex:none}
+.pill.working{background:var(--working)} .pill.waiting{background:var(--waiting)} .pill.done{background:var(--done)}
+.meta{font-size:13px;color:var(--ink-dim);font-variant-numeric:tabular-nums}
+.task{font-size:14px;margin-top:2px;overflow-wrap:anywhere}
+.note{font-size:13px;color:var(--ink-dim);padding:4px 2px;margin:0}
+
+@media (max-width:860px){
+  html,body{height:auto}
+  .app{height:auto;min-height:100%}
+  .main{grid-template-columns:minmax(0,1fr);grid-template-rows:auto;grid-template-areas:"stage" "roster" "feed"}
+  .stage{width:100%}
+  .roster,.feed{overflow:visible}
+}
+@media (prefers-reduced-motion:reduce){.chip.waiting.on{animation:none}}
+</style>
+
+<div class="app">
+  <header>
+    <h1>Kitten Office</h1>
+    <div class="chips" id="chips"></div>
+    <div class="spacer"></div>
+    <span class="demo" id="demoBadge">Demo: pretend agents</span>
+    <button class="btn" id="pauseBtn" type="button" aria-pressed="false">Pause demo</button>
+    <button class="btn" id="wakeBtn" type="button" aria-pressed="false">Keep screen on</button>
+  </header>
+  <div class="main">
+    <div class="stage" id="stage"><canvas id="cv" aria-label="Pixel art office where each kitten is one of your agents"></canvas></div>
+    <section class="feed" aria-label="Recent activity"><h2>Latest</h2><ol id="feed"></ol></section>
+    <section class="roster" aria-label="Agents"><h2>Agents</h2><div id="cards" style="display:flex;flex-direction:column;gap:8px"></div>
+      <p class="note">Tap a kitten or a card to find it. Kittens at desks are working, kittens on the yellow mat need you, and sleeping kittens are finished.</p>
+    </section>
+  </div>
+</div>
+
+<script>
+(() => {
+const W = 320, H = 200, OUT = '#2a2030', PINK = '#f29bb0', SPEED = 42, LANE = 162;
+const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+const COATS = [
+  { b:'#e8913a', d:'#b55f1f', w:'#fbe3c4', e:'#2a2030' }, // ginger
+  { b:'#3a3542', d:'#26222c', w:'#f2ede6', e:'#e9cf4f' }, // tuxedo
+  { b:'#efd6a6', d:'#d2ad73', w:'#fff4e0', e:'#2a2030' }, // cream
+  { b:'#46404f', d:'#35303d', w:'#46404f', e:'#9fe36b' }, // black
+  { b:'#a1a9b5', d:'#737c89', w:'#e6e9ee', e:'#2a2030' }, // grey
+  { b:'#f4ebdf', d:'#d97b33', w:'#ffffff', e:'#2a2030' }, // calico
+];
+
+const SIT = [
+  "..o......o..",
+  ".obo....obo.",
+  ".obpo..opbo.",
+  ".obbboobbbo.",
+  "obbbbbbbbbbo",
+  "obebbbbbbebo",
+  "obbbwppwbbbo",
+  ".obbwwwwbbo.",
+  "..obbbbbbo..",
+  ".obdbbbbdbo.",
+  ".obwwbbwwbo.",
+  "..oo....oo..",
+];
+const SLEEP = [
+  "....oooooo.o.o",
+  "..oobbbbbboobo",
+  ".obbdbbdbbobbo",
+  "obbbbbbbbbbkbo",
+  "obbdbbdbbbbbwo",
+  "oddddbbbbbbbo.",
+  ".ooooooooooo..",
+];
+const WALK_TOP = [
+  "...........o..o.",
+  "o.........obbbbo",
+  ".o........obbbeo",
+  ".o.ooooooobbbbpo",
+  "..obbbbbbbbbwwo.",
+  "..obdbbdbbbbbo..",
+  "..obbbbbbbbbbo..",
+  "..obwbbbbbbwbo..",
+];
+const WALK_A = ["..ob.ob..ob.ob..", "..oo.oo..oo.oo.."];
+const WALK_B = ["..obob....obob..", "..oooo....oooo.."];
+const WALK1 = WALK_TOP.concat(WALK_A), WALK2 = WALK_TOP.concat(WALK_B);
+
+// ---------- drawing helpers ----------
+const lo = document.createElement('canvas'); lo.width = W; lo.height = H;
+const g = lo.getContext('2d');
+const bg = document.createElement('canvas'); bg.width = W; bg.height = H;
+const b = bg.getContext('2d');
+function px(c, x, y, w, h, col) { c.fillStyle = col; c.fillRect(Math.round(x), Math.round(y), w, h); }
+function blit(c, rows, x, y, coat, flip) {
+  x = Math.round(x); y = Math.round(y);
+  const w = rows[0].length;
+  for (let r = 0; r < rows.length; r++) {
+    const row = rows[r];
+    for (let i = 0; i < w; i++) {
+      const ch = row[i];
+      if (ch === '.') continue;
+      c.fillStyle = (ch === 'o' || ch === 'k') ? OUT : ch === 'p' ? PINK : coat[ch];
+      c.fillRect(flip ? x + w - 1 - i : x + i, y + r, 1, 1);
+    }
+  }
+}
+function mix(a, c2, t) {
+  const pa = parseInt(a.slice(1), 16), pb = parseInt(c2.slice(1), 16);
+  const ch = s => Math.round(((pa >> s) & 255) * (1 - t) + ((pb >> s) & 255) * t);
+  return `rgb(${ch(16)},${ch(8)},${ch(0)})`;
+}
+function ellipse(c, cx, cy, rx, ry, col) {
+  c.fillStyle = col;
+  for (let y = -ry; y <= ry; y++) {
+    const w = Math.round(rx * Math.sqrt(1 - (y * y) / (ry * ry)));
+    c.fillRect(cx - w, cy + y, w * 2 + 1, 1);
+  }
+}
+function line(c, x0, y0, ang, len, col) {
+  c.fillStyle = col;
+  for (let i = 0; i <= len; i++) c.fillRect(Math.round(x0 + Math.sin(ang) * i), Math.round(y0 - Math.cos(ang) * i), 1, 1);
+}
+
+// ---------- the room (drawn once) ----------
+function drawRoom() {
+  // wall
+  px(b, 0, 0, W, 64, '#5b4a6e');
+  for (let x = 8; x < W; x += 16) px(b, x, 0, 1, 52, '#554468');
+  px(b, 0, 52, W, 10, '#463857'); px(b, 0, 52, W, 1, '#6a5880'); px(b, 0, 62, W, 2, OUT);
+  px(b, 0, 3, W, 1, '#3a2d48'); // fairy-light wire
+  // floor planks
+  for (let y = 64, n = 0; y < H; y += 8, n++) {
+    px(b, 0, y, W, 8, n % 2 ? '#86664a' : '#8e6e50');
+    px(b, 0, y + 7, W, 1, '#6e5238');
+    for (let x = (n % 3) * 23; x < W; x += 70) px(b, x, y, 1, 7, '#6e5238');
+  }
+  // window with night sky and city
+  px(b, 22, 9, 64, 40, OUT); px(b, 23, 10, 62, 38, '#e6dcc8');
+  for (let y = 12; y < 46; y++) px(b, 25, y, 58, 1, mix('#1c2547', '#4a5c92', (y - 12) / 34));
+  ellipse(b, 72, 18, 4, 4, '#f6efc9'); ellipse(b, 74, 17, 3, 3, mix('#1c2547', '#4a5c92', .15));
+  [[30,15],[40,22],[48,14],[60,25],[34,28],[66,30],[44,31]].forEach(([x,y]) => px(b, x, y, 1, 1, '#f6efc9'));
+  [[25,36,9,10],[34,32,7,14],[41,38,10,8],[51,30,6,16],[57,35,11,11],[68,33,7,13],[75,37,8,9]].forEach(([x,y,w,h]) => {
+    px(b, x, y, w, h, '#151b36');
+    for (let yy = y + 2; yy < y + h - 1; yy += 3) for (let xx = x + 1; xx < x + w - 1; xx += 3) if ((xx * 7 + yy * 3) % 5 < 2) px(b, xx, yy, 1, 1, '#ffd77a');
+  });
+  px(b, 53, 10, 2, 38, '#e6dcc8'); px(b, 23, 28, 62, 2, '#e6dcc8');
+  px(b, 19, 48, 70, 4, '#e6dcc8'); px(b, 19, 52, 70, 1, OUT);
+  // plant
+  [[104,30,6,8],[112,24,6,12],[118,32,7,7],[100,40,8,6],[120,40,7,5],[108,36,10,10]].forEach(([x,y,w,h],i) => px(b, x, y, w, h, i % 2 ? '#3f7d45' : '#5fa35a'));
+  px(b, 105, 49, 16, 13, OUT); px(b, 106, 50, 14, 11, '#c0623c'); px(b, 106, 50, 14, 2, '#d9784f');
+  // whiteboard with the build plan
+  px(b, 184, 11, 68, 36, OUT); px(b, 185, 12, 66, 34, '#ece7f2');
+  [[18,'#3a7bd5',40],[25,'#3a7bd5',30],[32,'#d9534f',36],[39,'#4caf50',22]].forEach(([y,c,w]) => {
+    px(b, 190, y - 1, 3, 3, OUT); px(b, 191, y, 1, 1, '#ece7f2'); px(b, 196, y, w, 1, c);
+  });
+  px(b, 191, 18, 1, 1, '#4caf50'); px(b, 191, 25, 1, 1, '#4caf50');
+  px(b, 188, 47, 60, 2, '#9a8fae');
+  // door
+  px(b, 277, 19, 28, 45, OUT); px(b, 278, 20, 26, 44, '#7a4e32');
+  px(b, 281, 24, 20, 15, '#6a4229'); px(b, 281, 43, 20, 17, '#6a4229');
+  px(b, 298, 41, 3, 3, '#f0c34a');
+  px(b, 276, 64, 30, 4, '#a3423a'); px(b, 276, 67, 30, 1, '#7f2f29');
+  // nap rug and cushions
+  px(b, 6, 168, 126, 30, '#8e3f61'); px(b, 8, 170, 122, 26, '#b0567a');
+  for (let x = 12; x < 128; x += 8) px(b, x, 172, 4, 22, '#bd6589');
+  BEDS.forEach(s => { ellipse(b, s.x, s.y, 13, 5, '#4f7fa3'); ellipse(b, s.x, s.y - 1, 11, 4, '#6fa3c7'); ellipse(b, s.x, s.y - 2, 7, 2, '#86b8d8'); });
+  // "needs you" mat with paw prints
+  px(b, 166, 166, 138, 32, '#b5832a'); px(b, 168, 168, 134, 28, '#d9a441');
+  for (let x = 172; x < 300; x += 14) { const y = 170 + ((x / 14) % 2) * 3; px(b, x, y + 2, 3, 2, '#c08f33'); px(b, x - 1, y, 1, 1, '#c08f33'); px(b, x + 1, y - 1, 1, 1, '#c08f33'); px(b, x + 3, y, 1, 1, '#c08f33'); }
+}
+
+// ---------- places in the room ----------
+const DESKS = [[70,104],[160,104],[250,104],[70,144],[160,144],[250,144]].map(([x,y]) => ({ x, y, occ:null }));
+const BEDS = [22, 52, 82, 112].map(x => ({ x, y:190, occ:null }));
+const HELP = [186, 210, 234, 258, 282].map(x => ({ x, y:182, occ:null }));
+const DOOR = { x:291, y:68 };
+
+// ---------- kittens ----------
+const kittens = new Map();
+let selected = null;
+const feed = [];
+
+function release(k) { if (k.slot) { if (k.slot.occ === k) k.slot.occ = null; k.slot = null; } }
+function claim(list, k) {
+  if (list.includes(k.slot)) return k.slot;
+  release(k);
+  let s = list.find(s => !s.occ);
+  if (!s) { const last = list[list.length - 1]; s = { x: last.x - 6 - Math.random() * 30, y: last.y + 3, occ:null }; }
+  s.occ = k; k.slot = s; return s;
+}
+function target(k) {
+  if (k.state === 'working') { const d = claim(DESKS, k); return DESKS.includes(d) ? { x:d.x - 6, y:d.y - 1 } : { x:d.x, y:d.y }; }
+  if (k.state === 'waiting') { const s = claim(HELP, k); return { x:s.x, y:s.y }; }
+  const s = claim(BEDS, k); return { x:s.x, y:s.y };
+}
+function route(k, t) {
+  k.path = [];
+  if (!t) return;
+  if (reduce) { k.x = t.x; k.y = t.y; return; }
+  if (Math.abs(k.x - t.x) < 1 && Math.abs(k.y - t.y) < 1) return;
+  if (Math.abs(k.y - LANE) > 1) k.path.push({ x:k.x, y:LANE });
+  k.path.push({ x:t.x, y:LANE }, t);
+}
+function pose(k) {
+  if (k.cheer > 0) return 'cheer';
+  if (k.path.length || k.leaving) return 'walk';
+  if (k.state === 'working') return DESKS.includes(k.slot) ? 'desk' : 'sit';
+  if (k.state === 'waiting') return 'wave';
+  return 'sleep';
+}
+function coatFor(id) { let h = 0; for (const c of String(id)) h = (h * 31 + c.charCodeAt(0)) >>> 0; return h % COATS.length; }
+
+function log(text) {
+  const d = new Date();
+  feed.unshift({ t: d.toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' }), text });
+  feed.length = Math.min(feed.length, 40);
+  renderFeed();
+}
+
+function setState(k, state, task) {
+  const prev = k.state;
+  k.state = state; if (task) k.task = task; k.since = Date.now();
+  if (state === 'done' && prev !== 'done' && !reduce) { k.cheer = 1.6; k.path = []; }
+  else route(k, target(k));
+  if (state === 'working') log(`${k.name} is working on ${k.task}`);
+  if (state === 'waiting') log(`${k.name} needs you: ${k.task}`);
+  if (state === 'done') log(`${k.name} finished: ${k.task}`);
+}
+function leave(k) {
+  if (k.leaving) return;
+  k.leaving = true; k.cheer = 0; release(k);
+  log(`${k.name} went home`);
+  if (reduce) { kittens.delete(k.id); return; }
+  k.path = [];
+  if (Math.abs(k.y - LANE) > 1) k.path.push({ x:k.x, y:LANE });
+  k.path.push({ x:DOOR.x, y:LANE }, { x:DOOR.x, y:DOOR.y });
+}
+
+// Public entry point. Step 2 will call this from real Claude Code hooks.
+// evt = { id, name, project, where: 'cloud'|'mac', state: 'working'|'waiting'|'done'|'ended', task }
+function update(evt, opts = {}) {
+  let k = kittens.get(evt.id);
+  if (evt.state === 'ended') { if (k) leave(k); renderRoster(); return; }
+  if (!k) {
+    k = { id:evt.id, name:evt.name || 'Kitten', coat:COATS[evt.coat ?? coatFor(evt.id)], coatIndex:evt.coat ?? coatFor(evt.id),
+          project:evt.project || 'unknown', where:evt.where || 'cloud', state:null, task:evt.task || '',
+          since:Date.now(), x:DOOR.x, y:DOOR.y, dir:-1, path:[], slot:null, cheer:0, t:Math.random() * 10, leaving:false };
+    kittens.set(k.id, k);
+    if (opts.placed) {
+      k.state = evt.state; k.since = Date.now() - (opts.ago || 0) * 60000;
+      const t = target(k); k.x = t.x; k.y = t.y;
+      renderRoster(); return;
+    }
+    log(`${k.name} arrived for ${k.project} (${k.where === 'mac' ? 'Mac' : 'cloud'})`);
+  }
+  if (evt.project) k.project = evt.project;
+  if (evt.where) k.where = evt.where;
+  setState(k, evt.state, evt.task);
+  renderRoster();
+}
+
+// ---------- per-frame simulation ----------
+let time = 0;
+function step(dt) {
+  time += dt;
+  for (const k of kittens.values()) {
+    k.t += dt;
+    if (k.cheer > 0) { k.cheer -= dt; if (k.cheer <= 0) { k.cheer = 0; route(k, target(k)); } continue; }
+    if (!k.path.length) continue;
+    const p = k.path[0], dx = p.x - k.x, dy = p.y - k.y, dist = Math.hypot(dx, dy), s = SPEED * dt;
+    if (Math.abs(dx) > .5) k.dir = Math.sign(dx);
+    if (dist <= s) { k.x = p.x; k.y = p.y; k.path.shift(); if (!k.path.length && k.leaving) { kittens.delete(k.id); if (selected === k.id) selected = null; renderRoster(); } }
+    else { k.x += dx / dist * s; k.y += dy / dist * s; }
+  }
+}
+
+function headY(k) {
+  const p = pose(k);
+  if (p === 'desk') return k.y - 21;
+  if (p === 'sleep') return k.y - 7;
+  if (p === 'walk') return k.y - 10;
+  if (p === 'cheer') return k.y - 12 - hop(k);
+  return k.y - 12;
+}
+function hop(k) { return Math.round(Math.abs(Math.sin(k.t * 9)) * 5); }
+
+function drawDesk(d) {
+  const x = d.x, y = d.y, k = d.occ, typing = k && kittens.has(k.id) && pose(k) === 'desk';
+  px(g, x - 19, y, 38, 2, 'rgba(40,25,20,.35)');
+  const lx = x + 3, ly = y - 21;
+  px(g, lx - 1, ly - 1, 14, 11, OUT); px(g, lx, ly, 12, 10, '#c9cdd6'); px(g, lx + 5, ly + 4, 2, 2, '#a9aeb9');
+  if (typing) px(g, lx, ly - 1, 12, 1, Math.sin(time * 6 + x) > 0 ? '#9fe0ff' : '#5fb9ea');
+  px(g, x - 16, y - 15, 5, 5, OUT); px(g, x - 15, y - 14, 3, 3, '#e0705a'); px(g, x - 11, y - 14, 1, 2, OUT);
+  if (typing && Math.sin(time * 2 + x) > .3) px(g, x - 14, y - 18, 1, 2, 'rgba(255,255,255,.5)');
+  px(g, x - 19, y - 11, 38, 6, OUT); px(g, x - 18, y - 10, 36, 4, '#c48a55'); px(g, x - 18, y - 10, 36, 1, '#d9a06a');
+  px(g, x - 19, y - 6, 38, 7, OUT); px(g, x - 18, y - 6, 36, 6, '#9c6a3e'); px(g, x - 18, y - 6, 36, 1, '#7d5230');
+  if (typing) {
+    const f = Math.floor(k.t * 8) % 2;
+    [[x - 10, f], [x - 5, 1 - f]].forEach(([pxx, up]) => { px(g, pxx, y - 11 - up, 4, 3, OUT); px(g, pxx + 1, y - 10 - up, 2, 1, k.coat.w); });
+  }
+}
+
+function drawKitten(k) {
+  const p = pose(k), c = k.coat, x = k.x, y = k.y;
+  if (p !== 'desk') px(g, x - 6, y - 1, 12, 2, 'rgba(30,18,14,.3)');
+  if (p === 'walk') { const f = Math.floor(k.t * 8) % 2; blit(g, f ? WALK2 : WALK1, x - 8, y - 10, c, k.dir < 0); }
+  else if (p === 'desk') blit(g, SIT, x - 6, y - 21, c);
+  else if (p === 'sit') blit(g, SIT, x - 6, y - 12, c);
+  else if (p === 'wave') {
+    blit(g, SIT, x - 6, y - 12, c);
+    const up = reduce ? 1 : Math.floor(k.t * 4) % 2;
+    const ay = y - 9 - (up ? 4 : 1);
+    px(g, x + 5, ay, 4, 5, OUT); px(g, x + 6, ay + 1, 2, 3, c.b); px(g, x + 6, ay + 1, 2, 1, c.w);
+  } else if (p === 'cheer') {
+    const h = hop(k);
+    blit(g, SIT, x - 6, y - 12 - h, c);
+    for (let i = 0; i < 5; i++) { const a = k.t * 3 + i * 1.26; px(g, x + Math.cos(a) * 11, y - 8 - h + Math.sin(a) * 8, 1, 1, i % 2 ? '#fff6a8' : '#8fd694'); }
+  } else blit(g, SLEEP, x - 7, y - 7, c);
+}
+
+function drawLights() {
+  const cols = ['#ffcf4a', '#ff8fa3', '#7cc4ff', '#8fd694'];
+  for (let i = 0, x = 6; x < W; x += 12, i++) {
+    const on = reduce || Math.sin(time * 1.5 + i * 1.7) > -0.4;
+    px(g, x, 4, 2, 2, on ? cols[i % 4] : '#5a4a6a');
+  }
+}
+function drawClock() {
+  const cx = 150, cy = 26;
+  ellipse(g, cx, cy, 9, 9, OUT); ellipse(g, cx, cy, 8, 8, '#f4eadc');
+  const d = new Date(), m = d.getMinutes() + d.getSeconds() / 60, h = (d.getHours() % 12) + m / 60;
+  line(g, cx, cy, h / 12 * Math.PI * 2, 4, OUT);
+  line(g, cx, cy, m / 60 * Math.PI * 2, 6, '#c0623c');
+  px(g, cx, cy, 1, 1, OUT);
+}
+
+// ---------- screen canvas + labels ----------
+const stage = document.getElementById('stage'), cv = document.getElementById('cv'), m = cv.getContext('2d');
+let cw = 0, ch = 0, s = 1, ox = 0, oy = 0, dpr = 1;
+function resize() {
+  const r = stage.getBoundingClientRect();
+  dpr = window.devicePixelRatio || 1;
+  cw = Math.max(1, Math.round(r.width * dpr)); ch = Math.max(1, Math.round(r.height * dpr));
+  cv.width = cw; cv.height = ch;
+  s = Math.min(cw / W, ch / H);
+  ox = Math.floor((cw - W * s) / 2); oy = Math.floor((ch - H * s) / 2);
+}
+new ResizeObserver(resize).observe(stage);
+
+function rr(x, y, w, h, r) { m.beginPath(); if (m.roundRect) m.roundRect(x, y, w, h, r); else m.rect(x, y, w, h); }
+function tag(text, lx, ly, bgc, fg, size) {
+  const fs = size || Math.max(10, Math.round(s * 4.2));
+  m.font = `600 ${fs}px "Pixelify Sans", ui-monospace, monospace`;
+  const sx = ox + lx * s, sy = oy + ly * s, w = m.measureText(text).width + fs * .8, h = fs * 1.35;
+  m.fillStyle = bgc; rr(sx - w / 2, sy - h / 2, w, h, fs * .3); m.fill();
+  m.fillStyle = fg; m.fillText(text, sx, sy + fs * .05);
+}
+
+function render() {
+  g.drawImage(bg, 0, 0);
+  drawLights(); drawClock();
+  const ents = DESKS.map(d => ({ y:d.y, f:() => drawDesk(d) }));
+  for (const k of kittens.values()) ents.push({ y:k.y, f:() => drawKitten(k) });
+  ents.sort((a, c) => a.y - c.y).forEach(e => e.f());
+
+  m.imageSmoothingEnabled = false;
+  m.fillStyle = '#1b1624'; m.fillRect(0, 0, cw, ch);
+  m.drawImage(lo, ox, oy, W * s, H * s);
+  m.textAlign = 'center'; m.textBaseline = 'middle';
+  const fs = Math.max(10, Math.round(s * 4.2));
+  m.globalAlpha = .55; tag('NEEDS YOU', 235, 194, 'rgba(0,0,0,0)', '#6b4710', Math.max(9, Math.round(s * 3.6))); m.globalAlpha = 1;
+
+  for (const k of kittens.values()) {
+    const p = pose(k), top = headY(k);
+    if (p === 'sleep' && !reduce) {
+      const z = (k.t * .8) % 1;
+      m.globalAlpha = 1 - z; tag('z', k.x + 7 + z * 3, k.y - 9 - z * 8, 'rgba(0,0,0,0)', '#e9e2f5', Math.round(fs * (0.8 + z * .5))); m.globalAlpha = 1;
+    }
+    if (p === 'wave') { const bob = reduce ? 0 : Math.round(Math.sin(k.t * 5) * 1.2); tag('!', k.x - 1, top - 6 + bob, '#ffcf4a', '#2a1d05', Math.round(fs * 1.25)); }
+    const label = k.state === 'done' && !k.leaving ? `✓ ${k.name}` : k.name;
+    const sel = selected === k.id;
+    const bgc = sel ? '#ffb27a' : 'rgba(33,27,44,.85)', fg = sel ? '#2a1a10' : '#f4eadc';
+    if (p === 'desk' && DESKS.includes(k.slot)) tag(label, k.slot.x, k.slot.y - 3, bgc, fg);
+    else tag(label, k.x, k.y + 5, bgc, fg);
+    if (sel) {
+      const sx = ox + k.x * s, sy = oy + (top - (p === 'wave' ? 13 : 4)) * s, a = s * 2.5;
+      m.fillStyle = '#ffb27a'; m.beginPath(); m.moveTo(sx - a, sy - a); m.lineTo(sx + a, sy - a); m.lineTo(sx, sy); m.closePath(); m.fill();
+    }
+  }
+}
+
+let last = performance.now();
+function frame(now) {
+  const dt = Math.min(.1, (now - last) / 1000); last = now;
+  step(dt); render();
+  requestAnimationFrame(frame);
+}
+
+// ---------- tapping ----------
+cv.addEventListener('pointerdown', e => {
+  const r = cv.getBoundingClientRect();
+  const lx = ((e.clientX - r.left) * dpr - ox) / s, ly = ((e.clientY - r.top) * dpr - oy) / s;
+  let best = null, bd = 16;
+  for (const k of kittens.values()) { const d = Math.hypot(k.x - lx, headY(k) + 5 - ly); if (d < bd) { bd = d; best = k; } }
+  select(best ? best.id : null, true);
+});
+function select(id, scroll) {
+  selected = selected === id ? null : id;
+  renderRoster();
+  if (scroll && selected) document.querySelector(`.card[data-id="${CSS.escape(selected)}"]`)?.scrollIntoView({ block:'nearest', behavior: reduce ? 'auto' : 'smooth' });
+}
+
+// ---------- side panels ----------
+const avatarCache = {};
+function avatar(i) {
+  if (avatarCache[i]) return avatarCache[i];
+  const c = document.createElement('canvas'); c.width = 16; c.height = 16;
+  blit(c.getContext('2d'), SIT, 2, 3, COATS[i]);
+  return (avatarCache[i] = c.toDataURL());
+}
+const esc = t => String(t).replace(/[&<>"']/g, ch => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[ch]));
+function ago(t) { const mnt = Math.floor((Date.now() - t) / 60000); return mnt < 1 ? 'just now' : mnt < 60 ? `${mnt}m` : `${Math.floor(mnt / 60)}h ${mnt % 60}m`; }
+const LABEL = { working:'Working', waiting:'Needs you', done:'Done' }, ORDER = { waiting:0, working:1, done:2 };
+const cards = document.getElementById('cards'), chips = document.getElementById('chips');
+
+function renderRoster() {
+  const list = [...kittens.values()].filter(k => !k.leaving).sort((a, c) => ORDER[a.state] - ORDER[c.state] || a.since - c.since);
+  cards.innerHTML = list.map(k => `
+    <button class="card ${k.state}${selected === k.id ? ' sel' : ''}" type="button" data-id="${esc(k.id)}">
+      <img src="${avatar(k.coatIndex)}" alt="">
+      <div>
+        <div class="row1"><span class="name">${esc(k.name)}</span><span class="pill ${k.state}">${LABEL[k.state]}</span></div>
+        <div class="meta">${esc(k.project)} · ${k.where === 'mac' ? 'Mac' : 'Cloud'} · ${ago(k.since)}</div>
+        <div class="task">${esc(k.task)}</div>
+      </div>
+    </button>`).join('') || '<p class="note">No agents running. Kittens walk in through the door when a session starts.</p>';
+  const n = st => list.filter(k => k.state === st).length;
+  const w = n('waiting');
+  chips.innerHTML = `<span class="chip waiting${w ? ' on' : ''}"><i></i>${w} need${w === 1 ? 's' : ''} you</span>
+    <span class="chip working"><i></i>${n('working')} working</span><span class="chip done"><i></i>${n('done')} done</span>`;
+  document.title = w ? `(${w}) Kitten Office` : 'Kitten Office';
+}
+cards.addEventListener('click', e => { const c = e.target.closest('.card'); if (c) select(c.dataset.id); });
+const feedEl = document.getElementById('feed');
+function renderFeed() { feedEl.innerHTML = feed.map(f => `<li><time>${f.t}</time><span>${esc(f.text)}</span></li>`).join(''); }
+setInterval(renderRoster, 20000);
+
+// ---------- keep screen on ----------
+const wakeBtn = document.getElementById('wakeBtn');
+let lock = null, wantLock = false;
+async function getLock() {
+  try { lock = await navigator.wakeLock.request('screen'); wakeBtn.setAttribute('aria-pressed', 'true'); wakeBtn.textContent = 'Screen stays on';
+        lock.addEventListener('release', () => { if (!wantLock) { wakeBtn.setAttribute('aria-pressed', 'false'); wakeBtn.textContent = 'Keep screen on'; } }); }
+  catch { wantLock = false; wakeBtn.textContent = 'Not allowed here'; wakeBtn.setAttribute('aria-pressed', 'false'); }
+}
+wakeBtn.addEventListener('click', () => {
+  if (wantLock) { wantLock = false; try { lock && lock.release(); } catch {} lock = null; wakeBtn.setAttribute('aria-pressed', 'false'); wakeBtn.textContent = 'Keep screen on'; }
+  else { wantLock = true; getLock(); }
+});
+document.addEventListener('visibilitychange', () => { if (wantLock && document.visibilityState === 'visible') getLock(); });
+
+// ---------- pretend agents ----------
+const NAMES = ['Mochi', 'Pickle', 'Nori', 'Waffles', 'Juniper', 'Bean', 'Sprout', 'Pudding'];
+const PROJECTS = ['nestrel', 'kitten-office', 'notes', 'nestrel'];
+const TASKS = ['Building the invite screen', 'Writing Row Level Security tests', 'Fixing a type error', 'Reviewing a builder diff', 'Updating SPEC.md', 'Checking timezones', 'Styling the settings page', 'Running the test suite'];
+const ASKS = ['Wants to run npm install', 'Asks which Supabase table to use', 'Wants to push to GitHub', 'Needs your OK to edit SPEC.md', 'Asks: keep or delete the old tests?'];
+const DONES = ['Tests pass', 'Step ticked off in SPEC.md', 'Pull request opened', 'Notes tidied'];
+const pick = a => a[Math.floor(Math.random() * a.length)];
+let nameIx = 0, idIx = 10, paused = false;
+
+[
+  { id:'a1', name:'Miso',    coat:0, project:'nestrel',       where:'cloud', state:'working', task:'Step 4: building invite links', ago:6 },
+  { id:'a2', name:'Pepper',  coat:1, project:'nestrel',       where:'mac',   state:'waiting', task:'Wants to run npm install', ago:1 },
+  { id:'a3', name:'Biscuit', coat:2, project:'kitten-office', where:'cloud', state:'working', task:'Drawing the office', ago:3 },
+  { id:'a4', name:'Luna',    coat:3, project:'notes',         where:'mac',   state:'done',    task:'Weekly notes tidied', ago:12 },
+  { id:'a5', name:'Tofu',    coat:4, project:'nestrel',       where:'cloud', state:'working', task:'Writing Row Level Security tests', ago:9 },
+].forEach(a => update(a, { placed:true, ago:a.ago }));
+feed.push({ t:new Date().toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' }), text:'Pepper needs you: Wants to run npm install' });
+renderFeed();
+
+function demoTick() {
+  if (!paused) {
+    const all = [...kittens.values()].filter(k => !k.leaving && !k.path.length && !k.cheer);
+    const by = st => all.filter(k => k.state === st);
+    const r = Math.random();
+    if (kittens.size < 5 && r < .3) {
+      update({ id:'d' + idIx++, name:NAMES[nameIx++ % NAMES.length], coat:(idIx) % COATS.length, project:pick(PROJECTS), where:Math.random() < .5 ? 'mac' : 'cloud', state:'working', task:pick(TASKS) });
+    } else if (by('waiting').length && r < .6) {
+      update({ id:pick(by('waiting')).id, state:'working', task:pick(TASKS) });
+    } else if (by('done').length && r < .72) {
+      const k = pick(by('done'));
+      update(kittens.size > 4 ? { id:k.id, state:'ended' } : { id:k.id, state:'working', task:pick(TASKS) });
+    } else if (by('working').length) {
+      const k = pick(by('working'));
+      update(Math.random() < .5 ? { id:k.id, state:'waiting', task:pick(ASKS) } : { id:k.id, state:'done', task:pick(DONES) });
+    }
+  }
+  setTimeout(demoTick, 4000 + Math.random() * 4000);
+}
+setTimeout(demoTick, 3500);
+const pauseBtn = document.getElementById('pauseBtn');
+pauseBtn.addEventListener('click', () => { paused = !paused; pauseBtn.setAttribute('aria-pressed', String(paused)); pauseBtn.textContent = paused ? 'Demo paused' : 'Pause demo'; });
+
+window.kittenOffice = { update, pauseDemo: () => { paused = true; } };
+
+drawRoom();
+resize();
+renderRoster();
+requestAnimationFrame(frame);
+})();
+</script>
+
+</body>
+</html>
