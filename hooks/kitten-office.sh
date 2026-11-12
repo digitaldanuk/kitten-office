@@ -38,6 +38,6 @@ echo "$state" > "$mark"
 body=$(jq -n --arg k "$KITTEN_WRITER_KEY" --arg id "$id" --arg s "$state" --arg p "$project" \
   --arg m "${KITTEN_MACHINE:-mac}" --arg t "$task" \
   '{p_key:$k, p_id:$id, p_state:$s, p_project:$p, p_machine:$m, p_task:$t}')
-( curl -sS -m 5 -o /dev/null -X POST "$KITTEN_URL/rest/v1/rpc/report_agent" \
+( curl -sS -m 5 -o /dev/null -X POST "$KITTEN_URL/rest/v1/rpc/kitten_report" \
     -H "apikey: $KITTEN_ANON_KEY" -H "Content-Type: application/json" -d "$body" >/dev/null 2>&1 & )
 exit 0

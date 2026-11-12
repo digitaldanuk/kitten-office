@@ -594,7 +594,7 @@ function startLive() {
   let first = true;
   async function poll() {
     try {
-      const r = await fetch(CONFIG.url.replace(/\/$/, '') + '/rest/v1/rpc/get_agents', {
+      const r = await fetch(CONFIG.url.replace(/\/$/, '') + '/rest/v1/rpc/kitten_get_agents', {
         method:'POST', headers:{ apikey:CONFIG.anonKey, 'Content-Type':'application/json' }, body:JSON.stringify({ p_key:VIEWER_KEY }) });
       if (r.status === 401 || r.status === 403) { badge.textContent = 'Viewer key not accepted. Check the link.'; setTimeout(poll, 30000); return; }
       if (!r.ok) throw new Error(String(r.status));

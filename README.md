@@ -23,11 +23,11 @@ On iPad: open the page in Safari, then Share → Add to Home Screen.
 ## How it works
 1. A Claude Code **hook** (`hooks/kitten-office.sh`) runs when a session starts, you send a message,
    a tool runs, Claude needs your permission, Claude finishes, or the session ends.
-2. It sends one small update to Supabase through `report_agent()`, which needs the **writer key**.
-3. The page asks Supabase every 2 seconds through `get_agents()`, which needs the **viewer key**.
+2. It sends one small update to Supabase through `kitten_report()`, which needs the **writer key**.
+3. The page asks Supabase every 2 seconds through `kitten_get_agents()`, which needs the **viewer key**.
    The viewer key goes after the `#` in the page link, so it is never stored in this repo.
 
-Nobody can read or change the database tables directly. Only bcrypt hashes of the two keys are stored.
+Everything lives in its own `kitten_office` schema, so it can share a Supabase project with other apps. Nobody can read or change its tables directly. Only bcrypt hashes of the two keys are stored.
 
 ## Setting up on your Mac
 1. Download this repo to your Mac.
