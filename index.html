@@ -99,6 +99,12 @@ button{font:inherit;color:inherit}
 const W = 320, H = 200, OUT = '#2a2030', PINK = '#f29bb0', SPEED = 42, LANE = 162;
 const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
+// Live mode settings. The URL and anon key are designed to be public: on their own they can't read anything.
+// The viewer key is NOT stored here: it goes after the # in the page link, e.g. .../index.html#your-viewer-key
+const CONFIG = { url: '', anonKey: '' };
+const VIEWER_KEY = /^[A-Za-z0-9-]{16,}$/.test(location.hash.slice(1)) ? location.hash.slice(1) : '';
+const LIVE = !!(CONFIG.url && VIEWER_KEY);
+
 const COATS = [
   { b:'#e8913a', d:'#b55f1f', w:'#fbe3c4', e:'#2a2030' }, // ginger
   { b:'#3a3542', d:'#26222c', w:'#f2ede6', e:'#e9cf4f' }, // tuxedo
@@ -307,7 +313,7 @@ function update(evt, opts = {}) {
           since:Date.now(), x:DOOR.x, y:DOOR.y, dir:-1, path:[], slot:null, cheer:0, t:Math.random() * 10, leaving:false };
     kittens.set(k.id, k);
     if (opts.placed) {
-      k.state = evt.state; k.since = Date.now() - (opts.ago || 0) * 60000;
+      k.state = evt.state; k.since = opts.since || Date.now() - (opts.ago || 0) * 60000;
       const t = target(k); k.x = t.x; k.y = t.y;
       renderRoster(); return;
     }
@@ -528,6 +534,7 @@ const DONES = ['Tests pass', 'Step ticked off in SPEC.md', 'Pull request opened'
 const pick = a => a[Math.floor(Math.random() * a.length)];
 let nameIx = 0, idIx = 10, paused = false;
 
+function startDemo() {
 [
   { id:'a1', name:'Miso',    coat:0, project:'nestrel',       where:'cloud', state:'working', task:'Step 4: building invite links', ago:6 },
   { id:'a2', name:'Pepper',  coat:1, project:'nestrel',       where:'mac',   state:'waiting', task:'Wants to run npm install', ago:1 },
@@ -558,10 +565,47 @@ function demoTick() {
   setTimeout(demoTick, 4000 + Math.random() * 4000);
 }
 setTimeout(demoTick, 3500);
+}
 const pauseBtn = document.getElementById('pauseBtn');
 pauseBtn.addEventListener('click', () => { paused = !paused; pauseBtn.setAttribute('aria-pressed', String(paused)); pauseBtn.textContent = paused ? 'Demo paused' : 'Pause demo'; });
 
 window.kittenOffice = { update, pauseDemo: () => { paused = true; } };
+
+// ---------- live mode: ask Supabase every 2 seconds ----------
+const CAT_NAMES = ['Miso','Pepper','Biscuit','Luna','Tofu','Mochi','Pickle','Nori','Waffles','Juniper','Bean','Sprout','Pudding','Olive','Ziggy','Clementine'];
+function nameFor(id) { let h = 7; for (const c of String(id)) h = (h * 33 + c.charCodeAt(0)) >>> 0; return CAT_NAMES[h % CAT_NAMES.length]; }
+function sync(rows, initial) {
+  const seen = new Set();
+  for (const r of rows) {
+    seen.add(r.id);
+    const k = kittens.get(r.id);
+    if ((k && k.leaving) || (!k && r.state === 'ended')) continue;
+    const evt = { id:r.id, name:nameFor(r.id), project:r.project, where:r.machine, state:r.state, task:r.task };
+    if (!k) update(evt, initial ? { placed:true, since:Date.parse(r.state_since) } : {});
+    else if (k.state !== r.state || k.task !== r.task) update(evt);
+  }
+  for (const k of [...kittens.values()]) if (!seen.has(k.id) && !k.leaving) update({ id:k.id, state:'ended' });
+  if (initial) log(rows.length ? `Connected. Found ${rows.length} agent${rows.length === 1 ? '' : 's'}.` : 'Connected. No agents running right now.');
+}
+function startLive() {
+  const badge = document.getElementById('demoBadge');
+  pauseBtn.hidden = true;
+  badge.textContent = 'Connecting…';
+  let first = true;
+  async function poll() {
+    try {
+      const r = await fetch(CONFIG.url.replace(/\/$/, '') + '/rest/v1/rpc/get_agents', {
+        method:'POST', headers:{ apikey:CONFIG.anonKey, 'Content-Type':'application/json' }, body:JSON.stringify({ p_key:VIEWER_KEY }) });
+      if (r.status === 401 || r.status === 403) { badge.textContent = 'Viewer key not accepted. Check the link.'; setTimeout(poll, 30000); return; }
+      if (!r.ok) throw new Error(String(r.status));
+      sync(await r.json(), first); first = false;
+      badge.textContent = 'Live';
+    } catch { badge.textContent = 'Offline. Retrying…'; }
+    setTimeout(poll, document.hidden ? 10000 : 2000);
+  }
+  poll();
+}
+if (LIVE) startLive(); else startDemo();
 
 drawRoom();
 resize();
