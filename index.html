@@ -101,7 +101,7 @@ const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 // Live mode settings. The URL and anon key are designed to be public: on their own they can't read anything.
 // The viewer key is NOT stored here: it goes after the # in the page link, e.g. .../index.html#your-viewer-key
-const CONFIG = { url: '', anonKey: '' };
+const CONFIG = { url: 'https://ilzvhbebeagtottevhij.supabase.co', anonKey: 'sb_publishable_j0weaO9F51p9MNZqrabd7w_zfzwZHc_' };
 const VIEWER_KEY = /^[A-Za-z0-9-]{16,}$/.test(location.hash.slice(1)) ? location.hash.slice(1) : '';
 const LIVE = !!(CONFIG.url && VIEWER_KEY);
 

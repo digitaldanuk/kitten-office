@@ -15,10 +15,11 @@ On iPad: open the page in Safari, then Share → Add to Home Screen.
 1. [x] Demo page with pretend kittens.
 2. [ ] Real agents on the Mac: a Claude Code hook sends status to Supabase, and the page listens to Supabase.
    - [x] Code written: `supabase/schema.sql`, `hooks/kitten-office.sh`, `install.sh`, live mode in `index.html`.
-   - [ ] Supabase project created and schema run.
+   - [x] Database set up (inside the StoryOS test project, in its own `kitten_office` schema).
+   - [x] Page connected (live when opened with `#<viewer key>` on the end of the link).
    - [ ] Hook installed on the Mac and tested.
 3. [ ] Real agents in the cloud: the same hook in cloud sessions.
-4. [ ] Host the page (e.g. GitHub Pages) so the iPad can open it from anywhere.
+4. [x] Hosted on GitHub Pages: https://digitaldanuk.github.io/kitten-office/
 
 ## How it works
 1. A Claude Code **hook** (`hooks/kitten-office.sh`) runs when a session starts, you send a message,
