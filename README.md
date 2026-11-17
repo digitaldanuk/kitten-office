@@ -6,6 +6,9 @@ A tiny web page for an iPad that shows your Claude Code agents as pixel-art kitt
 - **On the yellow mat, waving:** the agent needs you (a permission prompt or a question).
 - **Napping on a cushion:** the agent has finished.
 - Kittens walk in through the door when a session starts and walk out when it ends.
+- A kitten that naps for 30 minutes wanders off, and walks back in when its chat is used again.
+- **Lightning:** when a kitten finishes, the screen flashes twice like a lightning strike (at most once every 8 seconds; switch off with the Lightning button).
+- **Full screen** shows just the office and keeps the screen awake.
 
 ## Try it
 Open `index.html` in a browser. For now it runs **pretend agents** (demo mode).
