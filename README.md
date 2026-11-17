@@ -3,8 +3,8 @@
 A tiny web page for an iPad that shows your Claude Code agents as pixel-art kittens in an office.
 
 - **At a desk:** the agent is working.
-- **On the yellow mat, waving:** the agent needs you (a permission prompt or a question).
-- **Napping on a cushion:** the agent has finished.
+- **On the yellow mat, waving:** the agent needs you. A green ✓ means it finished and it's your turn; an amber ! means it's asking permission or a question.
+- **Napping on a cushion:** a finished chat you haven't replied to for 10 minutes, or a new chat you haven't used yet.
 - Kittens walk in through the door when a session starts and walk out when it ends.
 - A kitten that naps for 30 minutes wanders off, and walks back in when its chat is used again.
 - **Red alert:** when a kitten finishes, the screen flashes twice like lightning (at most once every 8 seconds), then a red glow pulses about once a second for 10 seconds with a banner naming who finished. Tap to dismiss; switch off with the Alerts button.

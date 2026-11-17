@@ -55,13 +55,13 @@ button{font:inherit;color:inherit}
 .roster{grid-area:roster;min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:8px}
 .card{display:grid;grid-template-columns:44px minmax(0,1fr);gap:10px;align-items:start;text-align:left;width:100%;background:var(--panel);border:2px solid transparent;border-radius:10px;padding:10px;cursor:pointer}
 .card:hover{background:var(--panel-2)}
-.card.waiting{border-color:var(--waiting)}
+.card.waiting,.card.yourturn{border-color:var(--waiting)}
 .card.sel{border-color:var(--accent);background:var(--panel-2)}
 .card img{width:44px;height:44px;image-rendering:pixelated;background:var(--panel-2);border-radius:8px}
 .row1{display:flex;align-items:center;justify-content:space-between;gap:8px}
 .name{font-family:var(--font-display);font-weight:600;font-size:18px;line-height:1.1}
 .pill{font-family:var(--font-display);font-size:12px;padding:2px 8px;border-radius:999px;color:#1d1726;flex:none}
-.pill.working{background:var(--working)} .pill.waiting{background:var(--waiting)} .pill.done{background:var(--done)}
+.pill.working{background:var(--working)} .pill.waiting{background:var(--waiting)} .pill.done{background:var(--done)} .pill.yourturn{background:var(--waiting)}
 .meta{font-size:13px;color:var(--ink-dim);font-variant-numeric:tabular-nums}
 .task{font-size:14px;margin-top:2px;overflow-wrap:anywhere}
 .note{font-size:13px;color:var(--ink-dim);padding:4px 2px;margin:0}
@@ -122,7 +122,7 @@ html.full .stage{width:min(100vw,calc(100vh*1.6));width:min(100vw,calc(100dvh*1.
     <div class="stage" id="stage"><canvas id="cv" aria-label="Pixel art office where each kitten is one of your agents"></canvas></div>
     <section class="feed" aria-label="Recent activity"><h2>Latest</h2><ol id="feed"></ol></section>
     <section class="roster" aria-label="Agents"><h2>Agents</h2><div id="cards" style="display:flex;flex-direction:column;gap:8px"></div>
-      <p class="note">Tap a kitten or a card to find it. Kittens at desks are working, kittens on the yellow mat need you, and sleeping kittens are finished.</p>
+      <p class="note">Tap a kitten or a card to find it. Kittens at desks are working. Kittens on the yellow mat need you: a ✓ means a chat finished and it's your turn, a ! means it's asking permission. Kittens nap if you leave them for 10 minutes, and wander off after 30.</p>
     </section>
   </div>
 </div>
@@ -289,7 +289,7 @@ function claim(list, k) {
 }
 function target(k) {
   if (k.state === 'working') { const d = claim(DESKS, k); return DESKS.includes(d) ? { x:d.x - 6, y:d.y - 1 } : { x:d.x, y:d.y }; }
-  if (k.state === 'waiting') { const s = claim(HELP, k); return { x:s.x, y:s.y }; }
+  if (k.state === 'waiting' || k.state === 'yourturn') { const s = claim(HELP, k); return { x:s.x, y:s.y }; }
   const s = claim(BEDS, k); return { x:s.x, y:s.y };
 }
 function route(k, t) {
@@ -304,7 +304,7 @@ function pose(k) {
   if (k.cheer > 0) return 'cheer';
   if (k.path.length || k.leaving) return 'walk';
   if (k.state === 'working') return DESKS.includes(k.slot) ? 'desk' : 'sit';
-  if (k.state === 'waiting') return 'wave';
+  if (k.state === 'waiting' || k.state === 'yourturn') return 'wave';
   return 'sleep';
 }
 function coatFor(id) { let h = 0; for (const c of String(id)) h = (h * 31 + c.charCodeAt(0)) >>> 0; return h % COATS.length; }
@@ -319,13 +319,18 @@ function log(text) {
 
 function setState(k, state, task) {
   const prev = k.state;
+  if (task) k.raw = task;   // exactly what the database said, so we can tell when it changes
+  if (state === 'working' && task) k.work = task;   // remember what it was asked to do
+  if (task && /^Finished\. Your turn\.$/.test(task) && k.work) task = `Finished: ${k.work}`;
   k.state = state; if (task) k.task = task; k.since = Date.now();
-  if (state === 'done' && (prev === 'working' || prev === 'waiting')) strike(k.name);
-  if (state === 'done' && prev !== 'done' && !reduce) { k.cheer = 1.6; k.path = []; }
+  const finished = (state === 'done' || state === 'yourturn') && (prev === 'working' || prev === 'waiting');
+  if (finished) strike(k.name);
+  if (finished && !reduce) { k.cheer = 1.6; k.path = []; }
   else route(k, target(k));
   if (state === 'working') log(`${k.name} is working on: ${short(k.task, 70)}`);
   if (state === 'waiting') log(`${k.name} needs you: ${short(k.task, 70)}`);
-  if (state === 'done') log(`${k.name} finished: ${short(k.task, 70)}`);
+  if (state === 'yourturn') log(k.work ? `${k.name} finished “${short(k.work, 50)}”. Your turn.` : `${k.name} finished. Your turn.`);
+  if (state === 'done') log(prev === 'yourturn' ? `${k.name} waited a while, then curled up for a nap` : `${k.name} finished: ${short(k.task, 70)}`);
 }
 function leave(k, why) {
   if (k.leaving) return;
@@ -348,7 +353,7 @@ function update(evt, opts = {}) {
           since:Date.now(), x:DOOR.x, y:DOOR.y, dir:-1, path:[], slot:null, cheer:0, t:Math.random() * 10, leaving:false };
     kittens.set(k.id, k);
     if (opts.placed) {
-      k.state = evt.state; k.since = opts.since || Date.now() - (opts.ago || 0) * 60000;
+      k.state = evt.state; k.raw = evt.task; if (evt.state === 'working') k.work = evt.task; k.since = opts.since || Date.now() - (opts.ago || 0) * 60000;
       const t = target(k); k.x = t.x; k.y = t.y;
       renderRoster(); return;
     }
@@ -477,7 +482,10 @@ function render() {
       const z = (k.t * .8) % 1;
       m.globalAlpha = 1 - z; tag('z', k.x + 7 + z * 3, k.y - 9 - z * 8, 'rgba(0,0,0,0)', '#e9e2f5', Math.round(fs * (0.8 + z * .5))); m.globalAlpha = 1;
     }
-    if (p === 'wave') { const bob = reduce ? 0 : Math.round(Math.sin(k.t * 5) * 1.2); tag('!', k.x - 1, top - 6 + bob, '#ffcf4a', '#2a1d05', Math.round(fs * 1.25)); }
+    if (p === 'wave') {
+      const bob = reduce ? 0 : Math.round(Math.sin(k.t * 5) * 1.2), mine = k.state === 'yourturn';
+      tag(mine ? '✓' : '!', k.x - 1, top - 6 + bob, mine ? '#8fd694' : '#ffcf4a', mine ? '#14301a' : '#2a1d05', Math.round(fs * 1.25));
+    }
     const label = k.state === 'done' && !k.leaving ? `✓ ${k.name}` : k.name;
     const sel = selected === k.id;
     const bgc = sel ? '#ffb27a' : 'rgba(33,27,44,.85)', fg = sel ? '#2a1a10' : '#f4eadc';
@@ -521,7 +529,7 @@ function avatar(i) {
 }
 const esc = t => String(t).replace(/[&<>"']/g, ch => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[ch]));
 function ago(t) { const mnt = Math.floor((Date.now() - t) / 60000); return mnt < 1 ? 'just now' : mnt < 60 ? `${mnt}m` : `${Math.floor(mnt / 60)}h ${mnt % 60}m`; }
-const LABEL = { working:'Working', waiting:'Needs you', done:'Done' }, ORDER = { waiting:0, working:1, done:2 };
+const LABEL = { working:'Working', waiting:'Needs you', yourturn:'Your turn', done:'Napping' }, ORDER = { waiting:0, yourturn:1, working:2, done:3 };
 const cards = document.getElementById('cards'), chips = document.getElementById('chips');
 
 function renderRoster() {
@@ -536,9 +544,9 @@ function renderRoster() {
       </div>
     </button>`).join('') || '<p class="note">No agents running. Kittens walk in through the door when a session starts.</p>';
   const n = st => list.filter(k => k.state === st).length;
-  const w = n('waiting');
+  const w = n('waiting') + n('yourturn');
   chips.innerHTML = `<span class="chip waiting${w ? ' on' : ''}"><i></i>${w} need${w === 1 ? 's' : ''} you</span>
-    <span class="chip working"><i></i>${n('working')} working</span><span class="chip done"><i></i>${n('done')} done</span>`;
+    <span class="chip working"><i></i>${n('working')} working</span><span class="chip done"><i></i>${n('done')} napping</span>`;
   document.title = w ? `(${w}) Kitten Office` : 'Kitten Office';
 }
 cards.addEventListener('click', e => { const c = e.target.closest('.card'); if (c) select(c.dataset.id); });
@@ -670,6 +678,13 @@ window.kittenOffice = { update, pauseDemo: () => { paused = true; } };
 // ---------- live mode: ask Supabase every 2 seconds ----------
 // A kitten that has napped this long wanders off. It comes back in when its chat is used again.
 const IDLE_MINUTES = 30;
+// A finished chat waits on the mat ("your turn") for this long, then naps.
+const MAT_MINUTES = 10;
+const isNewSession = r => /^New session/.test(r.task);   // opened but never asked anything: just nap
+function viewState(r) {
+  if (r.state !== 'done' || isNewSession(r)) return r.state;
+  return Date.now() - Date.parse(r.state_since) < MAT_MINUTES * 60000 ? 'yourturn' : 'done';
+}
 const dozedOff = r => r.state === 'done' && Date.now() - Date.parse(r.state_since) > IDLE_MINUTES * 60000;
 const CAT_NAMES = ['Miso','Pepper','Biscuit','Luna','Tofu','Mochi','Pickle','Nori','Waffles','Juniper','Bean','Sprout',
   'Pudding','Olive','Ziggy','Clementine','Noodle','Fig','Pumpkin','Basil','Toast','Marmalade','Socks','Pippin',
@@ -689,9 +704,9 @@ function sync(rows, initial) {
     const k = kittens.get(r.id);
     if ((k && k.leaving) || (!k && (r.state === 'ended' || dozedOff(r)))) continue;
     if (k && dozedOff(r)) { leave(k, `${k.name} had a long nap and wandered off`); renderRoster(); continue; }
-    const evt = { id:r.id, name:nameFor(r.id), project:r.project, where:r.machine, state:r.state, task:r.task };
+    const evt = { id:r.id, name:nameFor(r.id), project:r.project, where:r.machine, state:viewState(r), task:r.task };
     if (!k) update(evt, initial ? { placed:true, since:Date.parse(r.state_since) } : {});
-    else if (k.state !== r.state || k.task !== r.task) update(evt);
+    else if (k.state !== evt.state || k.raw !== r.task) update(evt);
   }
   for (const k of [...kittens.values()]) if (!seen.has(k.id) && !k.leaving) update({ id:k.id, state:'ended' });
   const here = rows.filter(r => r.state !== 'ended' && !dozedOff(r)).length;
