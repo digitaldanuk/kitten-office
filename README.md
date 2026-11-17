@@ -7,7 +7,7 @@ A tiny web page for an iPad that shows your Claude Code agents as pixel-art kitt
 - **Napping on a cushion:** the agent has finished.
 - Kittens walk in through the door when a session starts and walk out when it ends.
 - A kitten that naps for 30 minutes wanders off, and walks back in when its chat is used again.
-- **Lightning:** when a kitten finishes, the screen flashes twice like a lightning strike (at most once every 8 seconds; switch off with the Lightning button).
+- **Red alert:** when a kitten finishes, the screen flashes twice like lightning (at most once every 8 seconds), then a red glow pulses about once a second for 10 seconds with a banner naming who finished. Tap to dismiss; switch off with the Alerts button.
 - **Full screen** shows just the office and keeps the screen awake.
 
 ## Try it

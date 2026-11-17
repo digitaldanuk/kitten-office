@@ -82,6 +82,17 @@ button{font:inherit;color:inherit}
 @media (prefers-reduced-motion:reduce){.flash.go{animation:glow 1.4s ease-out}}
 @keyframes glow{0%{opacity:0}30%{opacity:.3}100%{opacity:0}}
 
+/* Red alert after the lightning: a soft red glow from the edges, pulsing about once a second, for 10 seconds */
+.alert{position:fixed;inset:0;z-index:19;pointer-events:none;opacity:0;transition:opacity .5s;background:rgba(255,20,30,.07);
+  box-shadow:inset 0 0 0 6px rgba(255,45,45,.9),inset 0 0 140px 50px rgba(255,0,20,.55)}
+.alert.on{opacity:1;animation:redalert 1.1s ease-in-out infinite}
+@keyframes redalert{0%,100%{opacity:.2}50%{opacity:1}}
+.alert-banner{position:fixed;z-index:21;left:50%;top:calc(env(safe-area-inset-top,0px) + 14px);transform:translateX(-50%);
+  max-width:calc(100% - 32px);font-family:var(--font-display);font-weight:600;font-size:clamp(18px,3vw,30px);letter-spacing:.12em;
+  text-transform:uppercase;text-align:center;color:#fff;background:#b3121b;border:2px solid #ff6b6b;border-radius:8px;padding:6px 18px;cursor:pointer}
+.alert-banner small{display:block;font-size:.45em;letter-spacing:.08em;opacity:.8;text-transform:none}
+@media (prefers-reduced-motion:reduce){.alert.on{animation:none;opacity:.6}}
+
 /* Full screen: only the office, as big as the screen allows */
 html.full,html.full body{height:100%;overflow:hidden;background:#1b1624}
 html.full .app{height:100%;min-height:0;grid-template-rows:minmax(0,1fr);padding:0}
@@ -93,6 +104,8 @@ html.full .stage{width:min(100vw,calc(100vh*1.6));width:min(100vw,calc(100dvh*1.
 </style>
 
 <div class="flash" id="flash" aria-hidden="true"></div>
+<div class="alert" id="alert" aria-hidden="true"></div>
+<button class="alert-banner" id="alertBanner" type="button" role="status" hidden></button>
 <div class="app">
   <header>
     <h1>Kitten Office</h1>
@@ -101,7 +114,7 @@ html.full .stage{width:min(100vw,calc(100vh*1.6));width:min(100vw,calc(100dvh*1.
     <span class="demo" id="demoBadge">Demo: pretend agents</span>
     <button class="btn" id="pauseBtn" type="button" aria-pressed="false">Pause demo</button>
     <button class="btn" id="wakeBtn" type="button" aria-pressed="false">Keep screen on</button>
-    <button class="btn" id="boltBtn" type="button" aria-pressed="true">Lightning on</button>
+    <button class="btn" id="boltBtn" type="button" aria-pressed="true">Alerts on</button>
     <button class="btn" id="fullBtn" type="button">Full screen</button>
   </header>
   <button class="btn exit-full" id="exitFullBtn" type="button" hidden>Exit full screen</button>
@@ -307,7 +320,7 @@ function log(text) {
 function setState(k, state, task) {
   const prev = k.state;
   k.state = state; if (task) k.task = task; k.since = Date.now();
-  if (state === 'done' && (prev === 'working' || prev === 'waiting')) strike();
+  if (state === 'done' && (prev === 'working' || prev === 'waiting')) strike(k.name);
   if (state === 'done' && prev !== 'done' && !reduce) { k.cheer = 1.6; k.path = []; }
   else route(k, target(k));
   if (state === 'working') log(`${k.name} is working on: ${short(k.task, 70)}`);
@@ -553,14 +566,31 @@ document.addEventListener('pointerdown', getLock);            // Safari may only
 const flashEl = document.getElementById('flash'), boltBtn = document.getElementById('boltBtn');
 let boltOn = true, lastBolt = 0, boltAt = -9;
 try { boltOn = localStorage.getItem('kitten-bolt') !== '0'; } catch {}
-function showBolt() { boltBtn.setAttribute('aria-pressed', String(boltOn)); boltBtn.textContent = boltOn ? 'Lightning on' : 'Lightning off'; }
+function showBolt() { boltBtn.setAttribute('aria-pressed', String(boltOn)); boltBtn.textContent = boltOn ? 'Alerts on' : 'Alerts off'; if (!boltOn) endAlert(); }
 showBolt();
 boltBtn.addEventListener('click', () => { boltOn = !boltOn; showBolt(); try { localStorage.setItem('kitten-bolt', boltOn ? '1' : '0'); } catch {} });
-function strike() {
-  if (!boltOn || Date.now() - lastBolt < 8000) return;   // never more than one strike every 8 seconds
-  lastBolt = Date.now(); boltAt = time;
-  flashEl.classList.remove('go'); void flashEl.offsetWidth; flashEl.classList.add('go');
+function strike(name) {
+  if (!boltOn) return;
+  let delay = 0;
+  if (Date.now() - lastBolt >= 8000) {                    // never more than one lightning strike every 8 seconds
+    lastBolt = Date.now(); boltAt = time; delay = 700;
+    flashEl.classList.remove('go'); void flashEl.offsetWidth; flashEl.classList.add('go');
+  }
+  setTimeout(() => redAlert(name), delay);
 }
+// Red alert: 10 seconds, then it clears. A tap anywhere clears it sooner.
+const alertEl = document.getElementById('alert'), alertBanner = document.getElementById('alertBanner');
+let alertTimer = null, alertNames = [];
+function redAlert(name) {
+  if (!boltOn) return;
+  if (name && !alertNames.includes(name)) alertNames.push(name);
+  alertBanner.innerHTML = `Red alert · ${esc(alertNames.join(', '))} finished<small>Tap to dismiss</small>`;
+  alertBanner.hidden = false; alertEl.classList.add('on');
+  clearTimeout(alertTimer); alertTimer = setTimeout(endAlert, 10000);
+}
+function endAlert() { clearTimeout(alertTimer); alertTimer = null; alertNames = []; alertEl.classList.remove('on'); alertBanner.hidden = true; }
+document.addEventListener('pointerdown', () => { if (alertTimer) endAlert(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && alertTimer) endAlert(); });
 function drawBolt() {
   const t = time - boltAt;
   if (t < 0 || t > .45 || (t > .1 && t < .2)) return;     // flicker on, off, on
