@@ -25,6 +25,12 @@ Read `README.md` for what it does and the step plan.
 - The owner holds the writer and viewer keys in a private file. Ask them for the writer key only via a
   secure route (e.g. `request_credential`), never in chat.
 
+## Page-side timings (in `index.html`)
+`MAT_MINUTES` 10 (finished chat waits on the mat as "your turn", then naps) · `IDLE_MINUTES` 30 (nappers wander off) ·
+`STALE_HOURS` 2 (silent "working" kittens go home) · `REST_MINUTES` 15 (screen goes black). Alerts: lightning at most
+every 8 s, then a 10 s red alert pulsing about once a second (kept slow and soft for photosensitive safety).
+`kitten_get_agents` returns `prompt` and `updated_at`; the page still works with the older version that doesn't.
+
 ## Event mapping (hook → kitten)
 SessionStart → done (naps) · UserPromptSubmit → working (task = prompt) · PreToolUse → working
 (skipped if state unchanged) · Notification → waiting (idle reminders ignored) · Stop → done · SessionEnd → ended (walks out).

@@ -9,6 +9,9 @@ A tiny web page for an iPad that shows your Claude Code agents as pixel-art kitt
 - A kitten that naps for 30 minutes wanders off, and walks back in when its chat is used again.
 - **Red alert:** when a kitten finishes, the screen flashes twice like lightning (at most once every 8 seconds), then a red glow pulses about once a second for 10 seconds with a banner naming who finished. Tap to dismiss; switch off with the Alerts button.
 - **Full screen** shows just the office and keeps the screen awake.
+- **Rest mode:** after 15 quiet minutes (no kitten changes, no taps) the screen goes black and stops keeping the iPad awake. Any change or a tap wakes it.
+- In full screen, a small yellow warning appears in the corner if the connection drops.
+- A kitten "working" with no check-in for 2 hours (crashed chat, sleeping Mac) goes home. The hook checks in every 5 minutes during long tasks.
 
 ## Try it
 Open `index.html` in a browser. For now it runs **pretend agents** (demo mode).

@@ -75,6 +75,10 @@ button{font:inherit;color:inherit}
 }
 @media (prefers-reduced-motion:reduce){.chip.waiting.on{animation:none}}
 
+/* Rest mode: black screen after a quiet spell; the little label drifts so nothing sits still */
+.rest{position:fixed;inset:0;z-index:30;background:#000;cursor:pointer}
+.rest span{position:absolute;font-family:var(--font-display);font-size:14px;color:#3a3445;white-space:nowrap;transition:left 20s linear,top 20s linear}
+
 /* Lightning when a kitten finishes: two quick flashes, once (well under 3 flashes a second) */
 .flash{position:fixed;inset:0;z-index:20;pointer-events:none;background:#fffbe8;opacity:0}
 .flash.go{animation:strike .9s ease-out}
@@ -101,8 +105,12 @@ html.full .main{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,
 html.full .stage{width:min(100vw,calc(100vh*1.6));width:min(100vw,calc(100dvh*1.6));border-radius:0}
 .exit-full{position:fixed;z-index:5;top:calc(env(safe-area-inset-top,0px) + 10px);right:calc(env(safe-area-inset-right,0px) + 10px);opacity:.75}
 .exit-full:hover,.exit-full:focus-visible{opacity:1}
+.net-warn{display:none}
+html.full .net-warn:not([hidden]){display:block;position:fixed;z-index:5;left:calc(env(safe-area-inset-left,0px) + 10px);bottom:calc(env(safe-area-inset-bottom,0px) + 10px);
+  max-width:calc(100% - 20px);font-family:var(--font-display);font-size:15px;color:#2a1d05;background:var(--waiting);border-radius:8px;padding:6px 12px}
 </style>
 
+<div class="rest" id="rest" hidden><span id="restText">Resting · tap to wake</span></div>
 <div class="flash" id="flash" aria-hidden="true"></div>
 <div class="alert" id="alert" aria-hidden="true"></div>
 <button class="alert-banner" id="alertBanner" type="button" role="status" hidden></button>
@@ -118,6 +126,7 @@ html.full .stage{width:min(100vw,calc(100vh*1.6));width:min(100vw,calc(100dvh*1.
     <button class="btn" id="fullBtn" type="button">Full screen</button>
   </header>
   <button class="btn exit-full" id="exitFullBtn" type="button" hidden>Exit full screen</button>
+  <div class="net-warn" id="netWarn" role="status" hidden></div>
   <div class="main">
     <div class="stage" id="stage"><canvas id="cv" aria-label="Pixel art office where each kitten is one of your agents"></canvas></div>
     <section class="feed" aria-label="Recent activity"><h2>Latest</h2><ol id="feed"></ol></section>
@@ -319,6 +328,7 @@ function log(text) {
 
 function setState(k, state, task) {
   const prev = k.state;
+  if (!(state === 'done' && prev === 'yourturn')) wake();   // a kitten nodding off isn't news
   if (task) k.raw = task;   // exactly what the database said, so we can tell when it changes
   if (state === 'working' && task) k.work = task;   // remember what it was asked to do
   if (task && /^Finished\. Your turn\.$/.test(task) && k.work) task = `Finished: ${k.work}`;
@@ -353,7 +363,9 @@ function update(evt, opts = {}) {
           since:Date.now(), x:DOOR.x, y:DOOR.y, dir:-1, path:[], slot:null, cheer:0, t:Math.random() * 10, leaving:false };
     kittens.set(k.id, k);
     if (opts.placed) {
-      k.state = evt.state; k.raw = evt.task; if (evt.state === 'working') k.work = evt.task; k.since = opts.since || Date.now() - (opts.ago || 0) * 60000;
+      k.state = evt.state; k.raw = evt.task; k.work = evt.work || (evt.state === 'working' ? evt.task : undefined);
+      if (k.work && /^Finished\. Your turn\.$/.test(k.task)) k.task = `Finished: ${k.work}`;
+      k.since = opts.since || Date.now() - (opts.ago || 0) * 60000;
       const t = target(k); k.x = t.x; k.y = t.y;
       renderRoster(); return;
     }
@@ -361,6 +373,7 @@ function update(evt, opts = {}) {
   }
   if (evt.project) k.project = evt.project;
   if (evt.where) k.where = evt.where;
+  if (evt.work) k.work = evt.work;
   setState(k, evt.state, evt.task);
   renderRoster();
 }
@@ -558,7 +571,8 @@ setInterval(renderRoster, 20000);
 // The screen stays awake while in full screen, or while the button is on.
 const wakeBtn = document.getElementById('wakeBtn');
 let lock = null, byButton = false;
-const wantLock = () => byButton || document.documentElement.classList.contains('full');
+let resting = false;
+const wantLock = () => (byButton || document.documentElement.classList.contains('full')) && !resting;
 function showLock() { wakeBtn.setAttribute('aria-pressed', String(!!lock)); wakeBtn.textContent = lock ? 'Screen stays on' : 'Keep screen on'; }
 async function getLock() {
   if (lock || !wantLock() || document.visibilityState !== 'visible') return;
@@ -569,6 +583,30 @@ function dropLock() { if (!wantLock() && lock) { try { lock.release(); } catch {
 wakeBtn.addEventListener('click', () => { byButton = !byButton; byButton ? getLock() : dropLock(); });
 document.addEventListener('visibilitychange', getLock);       // the iPad drops it when the page is hidden
 document.addEventListener('pointerdown', getLock);            // Safari may only allow it after a tap
+
+// ---------- rest mode ----------
+// After this long with no kitten changing state and no taps, the screen goes black and stops keeping
+// the iPad awake. Any kitten change or a tap wakes it straight away.
+const REST_MINUTES = 15;
+const restEl = document.getElementById('rest'), restText = document.getElementById('restText');
+let lastActivity = Date.now();
+function wake() {
+  lastActivity = Date.now();
+  if (!resting) return;
+  resting = false; restEl.hidden = true; getLock();
+}
+function rest() {
+  resting = true; restEl.hidden = false; dropLock(); driftRestText();
+}
+function driftRestText() {
+  restText.style.left = (5 + Math.random() * 70) + '%'; restText.style.top = (5 + Math.random() * 85) + '%';
+}
+setInterval(() => {
+  if (resting) driftRestText();
+  else if (Date.now() - lastActivity > REST_MINUTES * 60000) rest();
+}, 20000);
+document.addEventListener('pointerdown', wake, true);
+document.addEventListener('keydown', wake, true);
 
 // ---------- lightning ----------
 const flashEl = document.getElementById('flash'), boltBtn = document.getElementById('boltBtn');
@@ -685,6 +723,9 @@ function viewState(r) {
   if (r.state !== 'done' || isNewSession(r)) return r.state;
   return Date.now() - Date.parse(r.state_since) < MAT_MINUTES * 60000 ? 'yourturn' : 'done';
 }
+// A "working" chat that hasn't checked in for this long probably crashed or its Mac went to sleep.
+const STALE_HOURS = 2;
+const stale = r => r.state === 'working' && r.updated_at && Date.now() - Date.parse(r.updated_at) > STALE_HOURS * 3600000;
 const dozedOff = r => r.state === 'done' && Date.now() - Date.parse(r.state_since) > IDLE_MINUTES * 60000;
 const CAT_NAMES = ['Miso','Pepper','Biscuit','Luna','Tofu','Mochi','Pickle','Nori','Waffles','Juniper','Bean','Sprout',
   'Pudding','Olive','Ziggy','Clementine','Noodle','Fig','Pumpkin','Basil','Toast','Marmalade','Socks','Pippin',
@@ -702,20 +743,23 @@ function sync(rows, initial) {
   for (const r of rows) {
     seen.add(r.id);
     const k = kittens.get(r.id);
-    if ((k && k.leaving) || (!k && (r.state === 'ended' || dozedOff(r)))) continue;
-    if (k && dozedOff(r)) { leave(k, `${k.name} had a long nap and wandered off`); renderRoster(); continue; }
-    const evt = { id:r.id, name:nameFor(r.id), project:r.project, where:r.machine, state:viewState(r), task:r.task };
+    const gone = dozedOff(r) ? 'had a long nap and wandered off' : stale(r) ? `hasn't been heard from in ${STALE_HOURS} hours, so it went home` : '';
+    if ((k && k.leaving) || (!k && (r.state === 'ended' || gone))) continue;
+    if (k && gone) { leave(k, `${k.name} ${gone}`); renderRoster(); continue; }
+    const evt = { id:r.id, name:nameFor(r.id), project:r.project, where:r.machine, state:viewState(r), task:r.task, work:r.prompt || undefined };
     if (!k) update(evt, initial ? { placed:true, since:Date.parse(r.state_since) } : {});
     else if (k.state !== evt.state || k.raw !== r.task) update(evt);
   }
   for (const k of [...kittens.values()]) if (!seen.has(k.id) && !k.leaving) update({ id:k.id, state:'ended' });
-  const here = rows.filter(r => r.state !== 'ended' && !dozedOff(r)).length;
+  const here = rows.filter(r => r.state !== 'ended' && !dozedOff(r) && !stale(r)).length;
   if (initial) log(here ? `Connected. Found ${here} agent${here === 1 ? '' : 's'}.` : 'Connected. No agents running right now.');
 }
 function startLive() {
   const badge = document.getElementById('demoBadge');
   pauseBtn.hidden = true;
-  badge.textContent = 'Connecting…';
+  const netWarn = document.getElementById('netWarn');
+  const setConn = text => { badge.textContent = text; netWarn.textContent = text; netWarn.hidden = text === 'Live'; };
+  setConn('Connecting…');
   let first = true;
   async function poll() {
     try {
@@ -723,14 +767,14 @@ function startLive() {
         method:'POST', headers:{ apikey:CONFIG.anonKey, 'Content-Type':'application/json' }, body:JSON.stringify({ p_key:VIEWER_KEY }) });
       if (r.status === 401 || r.status === 403) {
         let why = ''; try { const j = await r.json(); why = j.message || j.msg || j.error || ''; } catch {}
-        badge.textContent = /not allowed/.test(why) ? 'Viewer key not accepted. Check the link.' : `Supabase refused (${r.status}): ${why || 'no reason given'}`;
+        setConn(/not allowed/.test(why) ? 'Viewer key not accepted. Check the link.' : `Supabase refused (${r.status}): ${why || 'no reason given'}`);
         setTimeout(poll, 30000); return;
       }
-      if (r.status === 404) { badge.textContent = 'Database not set up yet (kitten_get_agents not found).'; setTimeout(poll, 30000); return; }
+      if (r.status === 404) { setConn('Database not set up yet (kitten_get_agents not found).'); setTimeout(poll, 30000); return; }
       if (!r.ok) throw new Error(String(r.status));
       sync(await r.json(), first); first = false;
-      badge.textContent = 'Live';
-    } catch { badge.textContent = 'Offline. Retrying…'; }
+      setConn('Live');
+    } catch { setConn('Offline. Retrying…'); }
     setTimeout(poll, document.hidden ? 10000 : 2000);
   }
   poll();

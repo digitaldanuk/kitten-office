@@ -78,15 +78,18 @@ begin
 end $$;
 
 -- Called by the iPad page every couple of seconds.
-create or replace function public.kitten_get_agents(p_key text)
-returns table (id text, project text, machine text, state text, task text, state_since timestamptz)
+-- (Dropped first because its list of columns has changed over time.)
+drop function if exists public.kitten_get_agents(text);
+create function public.kitten_get_agents(p_key text)
+returns table (id text, project text, machine text, state text, task text, prompt text,
+               state_since timestamptz, updated_at timestamptz)
 language plpgsql stable security definer set search_path = '' as $$
 begin
   if p_key is null or not kitten_office.key_ok('viewer', p_key) then
     raise exception 'not allowed' using errcode = '42501';
   end if;
   return query
-    select a.id, a.project, a.machine, a.state, a.task, a.state_since
+    select a.id, a.project, a.machine, a.state, a.task, a.prompt, a.state_since, a.updated_at
     from kitten_office.agents a
     where a.updated_at > now() - interval '12 hours'
     order by a.state_since;

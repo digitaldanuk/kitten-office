@@ -35,9 +35,10 @@ case "$event" in
   *) exit 0 ;;
 esac
 
-# PreToolUse fires on every tool call: skip it if nothing changed since last time.
+# PreToolUse fires on every tool call: skip it if nothing changed since last time,
+# but still check in every 5 minutes so a long task doesn't look stuck.
 mark="${TMPDIR:-/tmp}/kitten-office-${id//[^A-Za-z0-9-]/}"
-if [ -z "$task" ] && [ "$(cat "$mark" 2>/dev/null)" = "$state" ]; then exit 0; fi
+if [ -z "$task" ] && [ "$(cat "$mark" 2>/dev/null)" = "$state" ] && [ -n "$(find "$mark" -mmin -5 2>/dev/null)" ]; then exit 0; fi
 echo "$state" > "$mark"
 [ "$state" = ended ] && rm -f "$mark"
 
